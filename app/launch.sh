@@ -37,6 +37,18 @@ fi
 # Mali-G52 as the RGB30, so it needs the same context or vtree fails to open one.
 { [ "$PLATFORM" = "RGB30" ] || [ "$PLATFORM" = "Miniloong" ]; } && export VTREE_GLES=1
 
+# Newer stock OS (Smart Pro S 2025+, kernel 5.15) does not export $PLATFORM,
+# and future devices may report new names. Fall back to CPU architecture
+# detection so the app still launches instead of exiting 1.
+case "$PLATFORM" in
+    "A30"|"Brick"|"BrickPro"|"Flip"|"Miniloong"|"SmartPro"|"SmartProS"|"Pixel2"|"RGB30"|"Zero"*|"MiyooMini"|"Anbernic"*)
+        ;;
+    *)
+        case "$(uname -m 2>/dev/null)" in
+            aarch64|arm64) PLATFORM="aarch64-fallback" ;;
+        esac
+        ;;
+esac
 
 case "$PLATFORM" in
     "A30")
@@ -46,7 +58,7 @@ case "$PLATFORM" in
         sync
         killall -q -USR2 joystickinput
         ;;
-    "Brick"|"BrickPro"|"Flip"|"Miniloong"|"SmartPro"|"SmartProS"|"Pixel2"|"RGB30"|"Zero"*)
+    "Brick"|"BrickPro"|"Flip"|"Miniloong"|"SmartPro"|"SmartProS"|"Pixel2"|"RGB30"|"Zero"*|"aarch64-fallback")
         ./vtree.aarch64 >"$HOME/log.txt" 2>&1
         sync
         ;;
