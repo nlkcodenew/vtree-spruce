@@ -28,7 +28,7 @@ jobs:
           TAG="beta-${{ github.ref_name }}"
           gh release view "$TAG" >/dev/null 2>&1 || \
             gh release create "$TAG" \
-              --target "${{ github.ref_name }}" \
+              --target "${{ github.sha }}" \
               --title "Beta Build (${{ github.ref_name }})" \
               --prerelease \
               --notes "vTree binaries built from ${{ github.ref_name }}" \
