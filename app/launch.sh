@@ -1,6 +1,10 @@
 #!/bin/sh
 
-. /mnt/SDCARD/spruce/scripts/helperFunctions.sh
+# helperFunctions.sh only exists on spruceOS; guard so this script also
+# runs on stock OS where the file is absent.
+if [ -f /mnt/SDCARD/spruce/scripts/helperFunctions.sh ]; then
+    . /mnt/SDCARD/spruce/scripts/helperFunctions.sh
+fi
 
 # Disable idle/shutdown timer while file manager is open
 killall -q idlemon 2>/dev/null
@@ -16,21 +20,33 @@ if [ -f "$HOME/config.ini" ]; then
     sed -i -e 's/^ScreenWidth=.*/ScreenWidth=0/' \
            -e 's/^ScreenHeight=.*/ScreenHeight=0/' \
            -e 's/^Rotation=.*/Rotation=0/' "$HOME/config.ini"
+
+    # handle swapped X/Y on RGB30. Can this be handled more gracefully by editing a gamecontrollerdb.txt?
+    if [ "$PLATFORM" = "RGB30" ]; then
+        sed -i -e 's/^OskKeyBksp=x/OskKeyBksp=y/' \
+               -e 's/^OskKeyShift=y/OskKeyShift=x/' \
+               -e 's/^KeyMenu=y/KeyMenu=x/' "$HOME/config.ini"
+    else
+        sed -i -e 's/^OskKeyBksp=y/OskKeyBksp=x/' \
+               -e 's/^OskKeyShift=x/OskKeyShift=y/' \
+               -e 's/^KeyMenu=x/KeyMenu=y/' "$HOME/config.ini"
+    fi
 fi
 
-case "$PLATFORM" in
-    "SmartPro"* ) export LD_LIBRARY_PATH="$HOME/lib-${PLATFORM}:$HOME/lib-Brick:$LD_LIBRARY_PATH" ;;
-    * )           export LD_LIBRARY_PATH="$HOME/lib-${PLATFORM}:$LD_LIBRARY_PATH" ;;
-esac
+# GLES window on the Mali blob. The Miniloong Pocket 1 has the same GLES-only
+# Mali-G52 as the RGB30, so it needs the same context or vtree fails to open one.
+{ [ "$PLATFORM" = "RGB30" ] || [ "$PLATFORM" = "Miniloong" ]; } && export VTREE_GLES=1
+
 
 case "$PLATFORM" in
     "A30")
+        export LD_LIBRARY_PATH="$HOME/lib-A30:$LD_LIBRARY_PATH"
         killall -q -USR2 joystickinput
         ./vtree.a30 --rotate=3 >"$HOME/log.txt" 2>&1
         sync
         killall -q -USR2 joystickinput
         ;;
-    "Brick"|"Flip"|"SmartPro"|"SmartProS"|"Pixel2")
+    "Brick"|"BrickPro"|"Flip"|"Miniloong"|"SmartPro"|"SmartProS"|"Pixel2"|"RGB30"|"Zero"*)
         ./vtree.aarch64 >"$HOME/log.txt" 2>&1
         sync
         ;;
@@ -47,11 +63,12 @@ case "$PLATFORM" in
         sync
         ;;
     "Anbernic"*)
-        cd "/mnt/vendor/bin/fileM"
-        /mnt/vendor/bin/fileM/dinguxCommand_en.dge
+        export_sdl_gamecontroller_map positional
+        ./vtree.aarch64 >"$HOME/log.txt" 2>&1
+        sync
         ;;
     *)
-        echo "File Management: unsupported PLATFORM=$PLATFORM" >&2
+        log_message "File Management: unsupported PLATFORM: $PLATFORM"
         exit 1
         ;;
 esac

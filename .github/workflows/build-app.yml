@@ -72,6 +72,12 @@ jobs:
           # (no lib-Brick/SmartPro/SmartProS/Flip/MiyooMini — those devices
           #  already ship the full SDL2 stack in a system path.)
 
+          # Static 7zz (aarch64) — archive extractor used by the vTree
+          # "Extract" menu (looked up at <exe_dir>/bin/7zz).
+          mkdir -p "$APP/bin"
+          cp app/bin/7zz "$APP/bin/7zz"
+          chmod +x "$APP/bin/7zz"
+
           echo "=== Final App folder contents ==="
           find "$APP" -maxdepth 2 | sort
 
