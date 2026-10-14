@@ -1,0 +1,13 @@
+{
+  "files": [
+    {
+      "path": "FileManagement.zip",
+      "sha256": "528a567febe0bb5c91487761ec454b1f1875650990ffb7502b0caf38ec1e2120",
+      "size": 4471359,
+      "url": "https://github.com/nlkcodenew/vtree-spruce/releases/download/v1.3.0/FileManagement.zip"
+    }
+  ],
+  "kid": "fm1",
+  "signature": "8ALKzmfKs9D7PUBx-wwANbEB4fTuqLhEUOVPT6ft_RznXT2fKCZXgfoPYUByiaTlXY1vN6v2XitoN28nM_9bAg",
+  "version": "1.3.0"
+}
