@@ -78,6 +78,24 @@ jobs:
           cp app/bin/7zz "$APP/bin/7zz"
           chmod +x "$APP/bin/7zz"
 
+          # OTA silent auto-update script (started in background by launch.sh)
+          cp app/ota-update.sh "$APP/"
+          chmod +x "$APP/ota-update.sh"
+
+          # VERSION file — read by ota-update.sh to decide if an update is needed.
+          # Tag builds (vX.Y.Z) record X.Y.Z; branch builds get a 0.0.0-beta
+          # marker that always sorts below any real release (ota-update.sh
+          # compares version components numerically, ignoring suffixes).
+          # NOTE: this is the APP release version, not the upstream vtree_version
+          # input (v1.1) — deriving it from the git tag is the robust source.
+          APP_VERSION="0.0.0-beta+${{ github.sha }}"
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            APP_VERSION="${{ github.ref_name }}"
+            APP_VERSION="${APP_VERSION#v}"
+          fi
+          printf '%s\n' "$APP_VERSION" > "$APP/VERSION"
+          echo "APP_VERSION=$APP_VERSION"
+
           echo "=== Final App folder contents ==="
           find "$APP" -maxdepth 2 | sort
 

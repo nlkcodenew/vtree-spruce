@@ -49,6 +49,22 @@ case "$PLATFORM" in
         esac
         ;;
 esac
+# OTA tu dong (nen, im lang): kiem tra 30s sau khi mo app, roi moi 10 phut.
+# Tat han bang FILEMANAGER_NO_OTA=1. Vong lap bi kill khi thoat app.
+OTA_PID=""
+if [ -x "$HOME/ota-update.sh" ]; then
+    (
+        sleep 30
+        while :; do
+            "$HOME/ota-update.sh" --apply >/dev/null 2>&1
+            sleep 600
+        done
+    ) &
+    OTA_PID=$!
+    # Kill vong lap nen khi script thoat theo bat ky duong nao (ke ca exit 1
+    # o nhanh unsupported platform) de khong rot tien trinh moi coi.
+    trap '[ -n "$OTA_PID" ] && kill "$OTA_PID" 2>/dev/null' EXIT
+fi
 
 case "$PLATFORM" in
     "A30")
