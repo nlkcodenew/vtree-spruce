@@ -37,6 +37,15 @@ LOG="$APP/ota.log"
 TMPD="/tmp/filemanager-ota-stage"
 MANIFEST_JSON="$TMPD/manifest.json"
 LOCKD="/tmp/filemanager-ota-lock"
+# May TrimUI khong co CA he thong (/etc/ssl/certs trong): curl loi 60, wget loi 5.
+# Dung bundle CA di kem (certs/cacert.pem) neu co; curl tu nhan bien CURL_CA_BUNDLE.
+CA_BUNDLE="$APP/certs/cacert.pem"
+if [ -f "$CA_BUNDLE" ]; then
+  export CURL_CA_BUNDLE="$CA_BUNDLE"
+  WGET_CACERT="--ca-certificate=$CA_BUNDLE"
+else
+  WGET_CACERT=""
+fi
 say() { echo "[ota] $*"; echo "$(date '+%Y-%m-%d %H:%M:%S' 2>/dev/null) $*" >> "$LOG" 2>/dev/null; }
 
 clean_tmp() { rm -rf "$TMPD" 2>/dev/null || true; }
@@ -76,7 +85,7 @@ fetch() {
     curl -fsSL --connect-timeout 8 --max-time 60 --retry 0 -o "$out" "$url" 2>/dev/null && return 0
   fi
   if command -v wget >/dev/null 2>&1; then
-    wget -q --timeout=60 --tries=1 -O "$out" "$url" 2>/dev/null && return 0
+    wget -q $WGET_CACERT --timeout=60 --tries=1 -O "$out" "$url" 2>/dev/null && return 0
   fi
   return 1
 }

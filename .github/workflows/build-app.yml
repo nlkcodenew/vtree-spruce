@@ -82,6 +82,12 @@ jobs:
           cp app/ota-update.sh "$APP/"
           chmod +x "$APP/ota-update.sh"
 
+          # CA bundle cho may khong co CA he thong (TrimUI stock OS de
+          # /etc/ssl/certs trong) - ota-update.sh dung qua CURL_CA_BUNDLE
+          # / wget --ca-certificate.
+          mkdir -p "$APP/certs"
+          cp app/certs/cacert.pem "$APP/certs/"
+
           # VERSION file — read by ota-update.sh to decide if an update is needed.
           # Tag builds (vX.Y.Z) record X.Y.Z; branch builds get a 0.0.0-beta
           # marker that always sorts below any real release (ota-update.sh
