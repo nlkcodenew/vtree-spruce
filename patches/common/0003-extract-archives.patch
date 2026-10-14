@@ -1,0 +1,349 @@
+diff --git a/fileop.c b/fileop.c
+index c376118..94bfdc0 100644
+--- a/fileop.c
++++ b/fileop.c
+@@ -8,6 +8,8 @@
+ #include <ctype.h>
+ #include <errno.h>
+ #include <fcntl.h>
++#include <strings.h>
++#include <sys/wait.h>
+ #ifdef __linux__
+ #  include <sys/syscall.h>
+ #  ifdef SYS_copy_file_range
+@@ -309,3 +311,140 @@ int delete_path(const char* path) {
+     if (r != 0) vtree_log("[delete] unlink FAILED: %s (errno %d: %s)\n", path, errno, strerror(errno));
+     return r;
+ }
++
++// ---- archive extraction ----
++
++static bool has_ext_ci(const char *name, const char *ext) {
++    size_t n = strlen(name), e = strlen(ext);
++    return n > e && strcasecmp(name + n - e, ext) == 0;
++}
++
++// True if the file name looks like a supported archive.
++// Kept tight on purpose: zip, rar, 7z, tar, gz, tgz.
++bool is_archive_name(const char *name) {
++    static const char *exts[] = { ".zip", ".rar", ".7z", ".tar", ".gz", ".tgz" };
++    size_t i;
++
++    if (!name || !*name) return false;
++    for (i = 0; i < sizeof(exts) / sizeof(exts[0]); i++)
++        if (has_ext_ci(name, exts[i])) return true;
++    return false;
++}
++
++// Derive the destination folder leaf from the archive file name:
++// basename minus the archive suffix (longest suffix wins, so
++// "backup.tar.gz" becomes "backup", not "backup.tar").
++static void archive_dir_leaf(const char *name, char *out, size_t out_len) {
++    static const char *suffixes[] = {
++        ".tar.gz", ".zip", ".rar", ".7z", ".tar", ".tgz", ".gz",
++    };
++    size_t n = strlen(name), cut = 0, i, leaf_len;
++
++    for (i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); i++) {
++        size_t e = strlen(suffixes[i]);
++        if (n > e && strcasecmp(name + n - e, suffixes[i]) == 0) { cut = e; break; }
++    }
++    leaf_len = n - cut;
++    if (leaf_len == 0) leaf_len = n;  // name was only an extension (".zip"): keep it
++    if (leaf_len >= out_len) leaf_len = out_len - 1;
++    memcpy(out, name, leaf_len);
++    out[leaf_len] = 0;
++    if (out[0] == 0 || strcmp(out, ".") == 0 || strcmp(out, "..") == 0)
++        snprintf(out, out_len, "extracted");
++}
++
++// Extract an archive into a new subdirectory of dest_parent named after
++// the archive (no extension); appends _1, _2, ... on name collisions.
++// Returns 0 on success, -1 on failure with errbuf filled in.
++//
++// The extractor is fork+exec-ed, never system(): the bundled static 7zz at
++// <exe_dir>/bin/7zz handles zip/7z/rar/tar/gz; when it is missing we fall
++// back to the system unzip, but only for .zip files. Runs synchronously,
++// like paste in v1.1 (no progress dialog exists yet).
++int extract_archive(const char *archive_path, const char *dest_parent,
++                    char *errbuf, size_t errbuf_len) {
++    struct stat ast, st;
++    const char *slash, *base;
++    char leaf[256], destbase[MAX_PATH], dest[MAX_PATH], sevenzz[MAX_PATH];
++    char outopt[MAX_PATH + 3];
++    bool have_7zz = false;
++    pid_t pid;
++    int status, n = 0;
++
++    if (errbuf && errbuf_len) errbuf[0] = 0;
++
++    if (!archive_path || !dest_parent) {
++        snprintf(errbuf, errbuf_len, "Bad arguments");
++        return -1;
++    }
++    if (stat(archive_path, &ast) != 0 || !S_ISREG(ast.st_mode)) {
++        snprintf(errbuf, errbuf_len, "Not a file: %.200s", archive_path);
++        return -1;
++    }
++
++    slash = strrchr(archive_path, '/');
++    base = slash ? slash + 1 : archive_path;
++    archive_dir_leaf(base, leaf, sizeof(leaf));
++
++    // Pick a non-colliding destination dir.
++    join_path(destbase, dest_parent, leaf);
++    strncpy(dest, destbase, sizeof(dest) - 1);
++    dest[sizeof(dest) - 1] = 0;
++    while (stat(dest, &st) == 0) {
++        if (++n > 999) {
++            snprintf(errbuf, errbuf_len, "Too many existing folders");
++            return -1;
++        }
++        if (snprintf(dest, sizeof(dest), "%s_%d", destbase, n) >= (int)sizeof(dest)) {
++            snprintf(errbuf, errbuf_len, "Path too long");
++            return -1;
++        }
++    }
++
++    // Choose the extractor.
++    if (vtree_exe_dir[0] != 0) {
++        join_path(sevenzz, vtree_exe_dir, "bin/7zz");
++        have_7zz = (access(sevenzz, X_OK) == 0);
++    }
++    if (!have_7zz && !has_ext_ci(base, ".zip")) {
++        snprintf(errbuf, errbuf_len, "No extractor for %.32s (7zz missing)", base);
++        return -1;
++    }
++
++    if (mkdir(dest, 0755) != 0) {
++        snprintf(errbuf, errbuf_len, "mkdir failed: %.200s", strerror(errno));
++        return -1;
++    }
++
++    pid = fork();
++    if (pid < 0) {
++        snprintf(errbuf, errbuf_len, "fork failed: %.200s", strerror(errno));
++        rmdir(dest);
++        return -1;
++    }
++    if (pid == 0) {
++        // Child: never block on a password prompt; answer yes to overwrites.
++        int dn = open("/dev/null", O_RDONLY);
++        if (dn >= 0) {
++            dup2(dn, STDIN_FILENO);
++            if (dn != STDIN_FILENO) close(dn);
++        }
++        if (have_7zz) {
++            // 7zz x -o<dest> -y <archive>  (argv array, no shell involved)
++            snprintf(outopt, sizeof(outopt), "-o%s", dest);
++            execl(sevenzz, "7zz", "x", outopt, "-y", archive_path, (char *)NULL);
++        } else {
++            execlp("unzip", "unzip", "-q", "-o", archive_path, "-d", dest, (char *)NULL);
++        }
++        _exit(127);  // execl failed
++    }
++    while (waitpid(pid, &status, 0) < 0 && errno == EINTR) { /* retry */ }
++    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
++        int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
++        snprintf(errbuf, errbuf_len, "Extractor failed (code %d)", code);
++        return -1;
++    }
++    vtree_log("[extract] %s -> %s (%s)\n",
++              archive_path, dest, have_7zz ? "7zz" : "unzip");
++    return 0;
++}
+diff --git a/lang/English.ini b/lang/English.ini
+index 3c2c2f5..2767f05 100644
+--- a/lang/English.ini
++++ b/lang/English.ini
+@@ -22,6 +22,8 @@ FileOp_Delete=Delete
+ FileOp_NewFile=New File
+ FileOp_NewFolder=New Folder
+ FileOp_Back=Back
++FileOp_Extract=Extract
++FileOp_Extracted=Extracted
+ FileOp_ConfirmDelete=CONFIRM DELETE?
+ 
+ [ActionChooser]
+diff --git a/lang/Polish.ini b/lang/Polish.ini
+index e81d5dd..a5e192e 100644
+--- a/lang/Polish.ini
++++ b/lang/Polish.ini
+@@ -22,6 +22,8 @@ FileOp_Delete=Usuń
+ FileOp_NewFile=Nowy plik
+ FileOp_NewFolder=Nowy folder
+ FileOp_Back=Wróć
++FileOp_Extract=Wypakuj
++FileOp_Extracted=Wypakowano
+ FileOp_ConfirmDelete=POTWIERDŹ USUNIĘCIE?
+ 
+ [ActionChooser]
+diff --git a/lang/Vietnamese.ini b/lang/Vietnamese.ini
+index d6ac998..dc74b33 100644
+--- a/lang/Vietnamese.ini
++++ b/lang/Vietnamese.ini
+@@ -22,6 +22,8 @@ FileOp_Delete=Xóa
+ FileOp_NewFile=Tạo tệp mới
+ FileOp_NewFolder=Tạo thư mục mới
+ FileOp_Back=Quay lại
++FileOp_Extract=Giải nén
++FileOp_Extracted=Đã giải nén
+ FileOp_ConfirmDelete=XÁC NHẬN SẼ XÓA?
+ 
+ [ActionChooser]
+diff --git a/main.c b/main.c
+index 829088b..4b189a0 100644
+--- a/main.c
++++ b/main.c
+@@ -80,12 +80,27 @@ static const char *topmenu_items[TOPMENU_MAX] = { "Menu_Files", "Menu_Settings",
+ #define FILEMENU_NEWFILE 6
+ #define FILEMENU_NEWDIR  7
+ #define FILEMENU_BACK    8
+-#define FILEMENU_MAX     9
++#define FILEMENU_EXTRACT 9
++#define FILEMENU_MAX     10
+ static const char *filemenu_items[FILEMENU_MAX] = {
+     "FileOp_Copy", "FileOp_Cut", "FileOp_Paste", "FileOp_Symlink",
+-    "FileOp_Rename", "FileOp_Delete", "FileOp_NewFile", "FileOp_NewFolder", "FileOp_Back"
++    "FileOp_Rename", "FileOp_Delete", "FileOp_NewFile", "FileOp_NewFolder",
++    "FileOp_Back", "FileOp_Extract"
+ };
+ 
++// True when the Extract entry must be skipped/disabled: only a single
++// archive file under the cursor can be extracted (never "..", never a dir).
++static bool menu_extract_unavailable(void) {
++    AppState *ps = &panes[active_pane];
++    if (ps->file_count <= 0 || ps->selected_index < 0 ||
++        ps->selected_index >= ps->file_count)
++        return true;
++    FileEntry *fe = &ps->files[ps->selected_index];
++    if (fe->is_dir || strcmp(fe->name, "..") == 0)
++        return true;
++    return !is_archive_name(fe->name);
++}
++
+ SDL_Window        *window   = NULL;
+ SDL_Renderer      *renderer = NULL;
+ SDL_GameController *pad     = NULL;
+@@ -1911,7 +1926,7 @@ int main(int argc, char *argv[]) {
+                         about_active = false; delete_confirm_active = false;
+                         if (cfg.two_menu_mode) {
+                             menu_in_files = true; menu_is_system = false; filemenu_sel = 0;
+-                            { bool _am=false; for(int _i=0;_i<s->file_count;_i++) if(s->files[_i].marked){_am=true;break;} if(!_am&&!cfg.single_pane) for(int _i=0;_i<panes[1-active_pane].file_count;_i++) if(panes[1-active_pane].files[_i].marked){_am=true;break;} bool _dd=(!_am&&s->file_count>0&&strcmp(s->files[s->selected_index].name,"..")==0); while((_dd&&(filemenu_sel==FILEMENU_COPY||filemenu_sel==FILEMENU_CUT||filemenu_sel==FILEMENU_RENAME||filemenu_sel==FILEMENU_DELETE))||(filemenu_sel==FILEMENU_PASTE&&clip.op==OP_NONE)||(filemenu_sel==FILEMENU_SYMLINK&&(clip.op!=OP_COPY||clip.count==0||(!fs_supports_symlinks(panes[0].current_path)&&!fs_supports_symlinks(panes[1].current_path))))||(filemenu_sel==FILEMENU_BACK&&cfg.two_menu_mode)) filemenu_sel++; }
++                            { bool _am=false; for(int _i=0;_i<s->file_count;_i++) if(s->files[_i].marked){_am=true;break;} if(!_am&&!cfg.single_pane) for(int _i=0;_i<panes[1-active_pane].file_count;_i++) if(panes[1-active_pane].files[_i].marked){_am=true;break;} bool _dd=(!_am&&s->file_count>0&&strcmp(s->files[s->selected_index].name,"..")==0); while((_dd&&(filemenu_sel==FILEMENU_COPY||filemenu_sel==FILEMENU_CUT||filemenu_sel==FILEMENU_RENAME||filemenu_sel==FILEMENU_DELETE))||(filemenu_sel==FILEMENU_PASTE&&clip.op==OP_NONE)||(filemenu_sel==FILEMENU_SYMLINK&&(clip.op!=OP_COPY||clip.count==0||(!fs_supports_symlinks(panes[0].current_path)&&!fs_supports_symlinks(panes[1].current_path))))||(filemenu_sel==FILEMENU_BACK&&cfg.two_menu_mode)||(filemenu_sel==FILEMENU_EXTRACT&&menu_extract_unavailable())) filemenu_sel++; }
+                         } else {
+                             menu_in_files = false; menu_is_system = false; menu_selection = 0;
+                         }
+@@ -2089,6 +2104,7 @@ int main(int argc, char *argv[]) {
+                                    (filemenu_sel == FILEMENU_SYMLINK && (clip.op != OP_COPY || clip.count == 0 ||
+                                        (!fs_supports_symlinks(panes[0].current_path) &&
+                                         !fs_supports_symlinks(panes[1].current_path)))) ||
++                                   (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable()) ||
+                                    DOTDOT_SKIP(filemenu_sel) || BACK_SKIP(filemenu_sel))
+                                 filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
+                             delete_confirm_active = false;
+@@ -2100,6 +2116,7 @@ int main(int argc, char *argv[]) {
+                                    (filemenu_sel == FILEMENU_SYMLINK && (clip.op != OP_COPY || clip.count == 0 ||
+                                        (!fs_supports_symlinks(panes[0].current_path) &&
+                                         !fs_supports_symlinks(panes[1].current_path)))) ||
++                                   (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable()) ||
+                                    DOTDOT_SKIP(filemenu_sel) || BACK_SKIP(filemenu_sel))
+                                 filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
+                             delete_confirm_active = false;
+@@ -2208,6 +2225,29 @@ int main(int argc, char *argv[]) {
+                                 osk_enter_new(s->current_path, false);
+                             } else if (filemenu_sel == FILEMENU_NEWDIR) {
+                                 osk_enter_new(s->current_path, true);
++                            } else if (filemenu_sel == FILEMENU_EXTRACT) {
++                                AppState *ps = &panes[active_pane];
++                                if (!menu_extract_unavailable()) {
++                                    char src[MAX_PATH];
++                                    join_path(src, ps->current_path, ps->files[ps->selected_index].name);
++                                    char err[256];
++                                    if (extract_archive(src, ps->current_path, err, sizeof(err)) == 0) {
++                                        load_dir(0, panes[0].current_path);
++                                        load_dir(1, panes[1].current_path);
++                                        snprintf(explorer_toast_msg, sizeof(explorer_toast_msg),
++                                                 "%s", tr("FileOp_Extracted"));
++                                        explorer_toast_until = SDL_GetTicks() + 1600;
++                                        explorer_toast_tw    = 0;
++                                        if (font_menu) TTF_SizeText(font_menu, explorer_toast_msg, &explorer_toast_tw, NULL);
++                                    } else {
++                                        snprintf(exec_error_title, sizeof(exec_error_title),
++                                                 "%s", tr("FileOp_Extract"));
++                                        snprintf(exec_error_msg, sizeof(exec_error_msg),
++                                                 "%.220s", err);
++                                        exec_error_active = true;
++                                    }
++                                }
++                                current_mode = MODE_EXPLORER;
+                             }
+                         }
+                     // ── Top-level / system menu ───────────────────────────────
+@@ -2229,7 +2269,7 @@ int main(int argc, char *argv[]) {
+                             int sel = menu_is_system ? sys_items[menu_selection] : menu_selection;
+                             if (sel == TOPMENU_FILES) {
+                                 menu_in_files = true; filemenu_sel = 0;
+-                                { bool _am=false; for(int _i=0;_i<s->file_count;_i++) if(s->files[_i].marked){_am=true;break;} if(!_am&&!cfg.single_pane) for(int _i=0;_i<panes[1-active_pane].file_count;_i++) if(panes[1-active_pane].files[_i].marked){_am=true;break;} bool _dd=(!_am&&s->file_count>0&&strcmp(s->files[s->selected_index].name,"..")==0); while((_dd&&(filemenu_sel==FILEMENU_COPY||filemenu_sel==FILEMENU_CUT||filemenu_sel==FILEMENU_RENAME||filemenu_sel==FILEMENU_DELETE))||(filemenu_sel==FILEMENU_PASTE&&clip.op==OP_NONE)||(filemenu_sel==FILEMENU_SYMLINK&&(clip.op!=OP_COPY||clip.count==0||(!fs_supports_symlinks(panes[0].current_path)&&!fs_supports_symlinks(panes[1].current_path))))||(filemenu_sel==FILEMENU_BACK&&cfg.two_menu_mode)) filemenu_sel++; }
++                                { bool _am=false; for(int _i=0;_i<s->file_count;_i++) if(s->files[_i].marked){_am=true;break;} if(!_am&&!cfg.single_pane) for(int _i=0;_i<panes[1-active_pane].file_count;_i++) if(panes[1-active_pane].files[_i].marked){_am=true;break;} bool _dd=(!_am&&s->file_count>0&&strcmp(s->files[s->selected_index].name,"..")==0); while((_dd&&(filemenu_sel==FILEMENU_COPY||filemenu_sel==FILEMENU_CUT||filemenu_sel==FILEMENU_RENAME||filemenu_sel==FILEMENU_DELETE))||(filemenu_sel==FILEMENU_PASTE&&clip.op==OP_NONE)||(filemenu_sel==FILEMENU_SYMLINK&&(clip.op!=OP_COPY||clip.count==0||(!fs_supports_symlinks(panes[0].current_path)&&!fs_supports_symlinks(panes[1].current_path))))||(filemenu_sel==FILEMENU_BACK&&cfg.two_menu_mode)||(filemenu_sel==FILEMENU_EXTRACT&&menu_extract_unavailable())) filemenu_sel++; }
+                             } else if (sel == TOPMENU_SETTINGS) {
+                                 cfg_snapshot       = cfg;
+                                 snapshot_theme_idx = current_named_theme;
+@@ -2491,6 +2531,8 @@ int main(int argc, char *argv[]) {
+                     filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
+                     if (filemenu_sel == FILEMENU_PASTE && clip.op == OP_NONE)
+                         filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
++                    if (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable())
++                        filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
+                     delete_confirm_active = false;
+                 } else {
+                     menu_selection = (menu_selection - 1 + TOPMENU_MAX) % TOPMENU_MAX;
+@@ -2510,6 +2552,8 @@ int main(int argc, char *argv[]) {
+                     filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
+                     if (filemenu_sel == FILEMENU_PASTE && clip.op == OP_NONE)
+                         filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
++                    if (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable())
++                        filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
+                     delete_confirm_active = false;
+                 } else {
+                     menu_selection = (menu_selection + 1) % TOPMENU_MAX;
+@@ -2753,7 +2797,8 @@ int main(int argc, char *argv[]) {
+                 // ── File ops submenu ────────────────────────────────────────
+                 SDL_Texture *sub_icons[FILEMENU_MAX] = {
+                     tex_copy, tex_cut, tex_paste, tex_symlink, tex_rename,
+-                    tex_delete, tex_newfile, tex_newfolder, tex_dirup
++                    tex_delete, tex_newfile, tex_newfolder, tex_dirup,
++                    NULL /* FILEMENU_EXTRACT: no icon shipped yet */
+                 };
+                 bool _any_m = false;
+                 AppState *rs = &panes[active_pane];
+@@ -2767,6 +2812,7 @@ int main(int argc, char *argv[]) {
+                                (i == FILEMENU_SYMLINK && (clip.op != OP_COPY || clip.count == 0 ||
+                                    (!fs_supports_symlinks(panes[0].current_path) &&
+                                     !fs_supports_symlinks(panes[1].current_path)))) ||
++                               (i == FILEMENU_EXTRACT && menu_extract_unavailable()) ||
+                                (_dotdot && (i == FILEMENU_COPY || i == FILEMENU_CUT ||
+                                             i == FILEMENU_RENAME || i == FILEMENU_DELETE));
+                     bool sel = (i == filemenu_sel);
+diff --git a/vtree.h b/vtree.h
+index cd505c1..e36b6d9 100644
+--- a/vtree.h
++++ b/vtree.h
+@@ -5,6 +5,7 @@
+ #include <SDL2/SDL_ttf.h>
+ #include <SDL2/SDL_image.h>
+ #include <stdbool.h>
++#include <stddef.h>
+ 
+ #define MAX_PATH           1024
+ #define MAX_FILES          1000   // imgview sibling cap — do not remove
+@@ -160,6 +161,9 @@ int   delete_path(const char *path);
+ char *trim(char *str);
+ void  format_size(long long bytes, char *out);
+ void  join_path(char *out, const char *dir, const char *name);
++bool  is_archive_name(const char *name);
++int   extract_archive(const char *archive_path, const char *dest_parent,
++                      char *errbuf, size_t errbuf_len);
+ 
+ // lang.c — i18n
+ #include "lang.h"
