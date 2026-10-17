@@ -52,6 +52,7 @@ jobs:
           cp app/config.json  "$APP/"
           cp app/config.ini   "$APP/"
           cp app/file.png     "$APP/"
+          cp app/background.png "$APP/"
           chmod +x "$APP/launch.sh"
 
           # Extra fonts shipped with the spruce build — merged with upstream fonts/
