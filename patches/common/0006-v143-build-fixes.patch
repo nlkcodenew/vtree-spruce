@@ -1,0 +1,38 @@
+From fbb62b2dc7152ae914346110b7443dd24041f711 Mon Sep 17 00:00:00 2001
+From: Muse <muse@local>
+Date: Sat, 17 Oct 2026 14:17:34 +0700
+Subject: [PATCH] port: 0006 build fixes for v1.4.3 (lpthread, strings.h)
+
+---
+ Makefile | 2 +-
+ viewer.c | 1 +
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/Makefile b/Makefile
+index 1091d9c..59fe493 100644
+--- a/Makefile
++++ b/Makefile
+@@ -37,7 +37,7 @@ CFLAGS_REL  := $(CFLAGS_COMMON) -O2 -DNDEBUG \
+                -D_FORTIFY_SOURCE=2 -fstack-protector-strong
+ LDFLAGS_REL :=
+ 
+-LIBS    := $(SDL2_LIBS) -lSDL2_ttf -lSDL2_image -lm
++LIBS    := $(SDL2_LIBS) -lSDL2_ttf -lSDL2_image -lm -lpthread
+ 
+ .PHONY: all release clean
+ 
+diff --git a/viewer.c b/viewer.c
+index 06ecf5b..7953ef9 100644
+--- a/viewer.c
++++ b/viewer.c
+@@ -18,6 +18,7 @@
+ 
+ #include "vtree.h"
+ #include <stdio.h>
++#include <strings.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <sys/stat.h>
+-- 
+2.43.0
+
