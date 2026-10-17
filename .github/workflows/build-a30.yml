@@ -5,12 +5,12 @@ on:
     inputs:
       vtree_version:
         description: 'vTree version/tag/commit'
-        default: 'v1.1'
+        default: 'v1.4.3'
   workflow_call:
     inputs:
       vtree_version:
         type: string
-        default: 'v1.1'
+        default: 'v1.4.3'
 
 permissions:
   contents: write
@@ -46,7 +46,7 @@ jobs:
         run: |
           mkdir -p output
           docker run --rm \
-            -e VTREE_VERSION=${{ inputs.vtree_version || 'v1.1' }} \
+            -e VTREE_VERSION=${{ inputs.vtree_version || 'v1.4.3' }} \
             -v ${{ github.workspace }}/output:/output \
             vtree-builder-a30
 

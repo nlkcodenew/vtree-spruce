@@ -1,17 +1,31 @@
+From d848394e51976a212daabdcd93a7d4e32f7bc37c Mon Sep 17 00:00:00 2001
+From: Muse <muse@local>
+Date: Sat, 17 Oct 2026 14:06:49 +0700
+Subject: [PATCH] port: 0003 extract archives
+
+---
+ fileop.c            | 139 ++++++++++++++++++++++++++++++++++++++++++++
+ lang/English.ini    |   2 +
+ lang/Polish.ini     |   2 +
+ lang/Vietnamese.ini |   2 +
+ main.c              |  56 ++++++++++++++++--
+ vtree.h             |   4 ++
+ 6 files changed, 200 insertions(+), 5 deletions(-)
+
 diff --git a/fileop.c b/fileop.c
-index c376118..94bfdc0 100644
+index 647383a..dc29bbf 100644
 --- a/fileop.c
 +++ b/fileop.c
-@@ -8,6 +8,8 @@
- #include <ctype.h>
+@@ -9,6 +9,8 @@
  #include <errno.h>
  #include <fcntl.h>
+ #include <stdint.h>
 +#include <strings.h>
 +#include <sys/wait.h>
  #ifdef __linux__
  #  include <sys/syscall.h>
  #  ifdef SYS_copy_file_range
-@@ -309,3 +311,140 @@ int delete_path(const char* path) {
+@@ -377,3 +379,140 @@ int delete_path(const char* path) {
      if (r != 0) vtree_log("[delete] unlink FAILED: %s (errno %d: %s)\n", path, errno, strerror(errno));
      return r;
  }
@@ -153,10 +167,10 @@ index c376118..94bfdc0 100644
 +    return 0;
 +}
 diff --git a/lang/English.ini b/lang/English.ini
-index 3c2c2f5..2767f05 100644
+index a34f8fa..77816d5 100644
 --- a/lang/English.ini
 +++ b/lang/English.ini
-@@ -22,6 +22,8 @@ FileOp_Delete=Delete
+@@ -23,6 +23,8 @@ FileOp_Delete=Delete
  FileOp_NewFile=New File
  FileOp_NewFolder=New Folder
  FileOp_Back=Back
@@ -166,10 +180,10 @@ index 3c2c2f5..2767f05 100644
  
  [ActionChooser]
 diff --git a/lang/Polish.ini b/lang/Polish.ini
-index e81d5dd..a5e192e 100644
+index 2234028..97fdbd8 100644
 --- a/lang/Polish.ini
 +++ b/lang/Polish.ini
-@@ -22,6 +22,8 @@ FileOp_Delete=Usuń
+@@ -23,6 +23,8 @@ FileOp_Delete=Usuń
  FileOp_NewFile=Nowy plik
  FileOp_NewFolder=Nowy folder
  FileOp_Back=Wróć
@@ -179,10 +193,10 @@ index e81d5dd..a5e192e 100644
  
  [ActionChooser]
 diff --git a/lang/Vietnamese.ini b/lang/Vietnamese.ini
-index d6ac998..dc74b33 100644
+index 0aea758..bdca999 100644
 --- a/lang/Vietnamese.ini
 +++ b/lang/Vietnamese.ini
-@@ -22,6 +22,8 @@ FileOp_Delete=Xóa
+@@ -23,6 +23,8 @@ FileOp_Delete=Xóa
  FileOp_NewFile=Tạo tệp mới
  FileOp_NewFolder=Tạo thư mục mới
  FileOp_Back=Quay lại
@@ -192,10 +206,10 @@ index d6ac998..dc74b33 100644
  
  [ActionChooser]
 diff --git a/main.c b/main.c
-index 829088b..4b189a0 100644
+index 9353a1f..a404b42 100644
 --- a/main.c
 +++ b/main.c
-@@ -80,12 +80,27 @@ static const char *topmenu_items[TOPMENU_MAX] = { "Menu_Files", "Menu_Settings",
+@@ -99,12 +99,27 @@ static const char *topmenu_items[TOPMENU_MAX] = { "Menu_Files", "Menu_Settings",
  #define FILEMENU_NEWFILE 6
  #define FILEMENU_NEWDIR  7
  #define FILEMENU_BACK    8
@@ -225,7 +239,7 @@ index 829088b..4b189a0 100644
  SDL_Window        *window   = NULL;
  SDL_Renderer      *renderer = NULL;
  SDL_GameController *pad     = NULL;
-@@ -1911,7 +1926,7 @@ int main(int argc, char *argv[]) {
+@@ -2708,7 +2723,7 @@ int main(int argc, char *argv[]) {
                          about_active = false; delete_confirm_active = false;
                          if (cfg.two_menu_mode) {
                              menu_in_files = true; menu_is_system = false; filemenu_sel = 0;
@@ -234,7 +248,7 @@ index 829088b..4b189a0 100644
                          } else {
                              menu_in_files = false; menu_is_system = false; menu_selection = 0;
                          }
-@@ -2089,6 +2104,7 @@ int main(int argc, char *argv[]) {
+@@ -2986,6 +3001,7 @@ int main(int argc, char *argv[]) {
                                     (filemenu_sel == FILEMENU_SYMLINK && (clip.op != OP_COPY || clip.count == 0 ||
                                         (!fs_supports_symlinks(panes[0].current_path) &&
                                          !fs_supports_symlinks(panes[1].current_path)))) ||
@@ -242,7 +256,7 @@ index 829088b..4b189a0 100644
                                     DOTDOT_SKIP(filemenu_sel) || BACK_SKIP(filemenu_sel))
                                  filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
                              delete_confirm_active = false;
-@@ -2100,6 +2116,7 @@ int main(int argc, char *argv[]) {
+@@ -2997,6 +3013,7 @@ int main(int argc, char *argv[]) {
                                     (filemenu_sel == FILEMENU_SYMLINK && (clip.op != OP_COPY || clip.count == 0 ||
                                         (!fs_supports_symlinks(panes[0].current_path) &&
                                          !fs_supports_symlinks(panes[1].current_path)))) ||
@@ -250,7 +264,7 @@ index 829088b..4b189a0 100644
                                     DOTDOT_SKIP(filemenu_sel) || BACK_SKIP(filemenu_sel))
                                  filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
                              delete_confirm_active = false;
-@@ -2208,6 +2225,29 @@ int main(int argc, char *argv[]) {
+@@ -3116,6 +3133,29 @@ int main(int argc, char *argv[]) {
                                  osk_enter_new(s->current_path, false);
                              } else if (filemenu_sel == FILEMENU_NEWDIR) {
                                  osk_enter_new(s->current_path, true);
@@ -280,7 +294,7 @@ index 829088b..4b189a0 100644
                              }
                          }
                      // ── Top-level / system menu ───────────────────────────────
-@@ -2229,7 +2269,7 @@ int main(int argc, char *argv[]) {
+@@ -3137,7 +3177,7 @@ int main(int argc, char *argv[]) {
                              int sel = menu_is_system ? sys_items[menu_selection] : menu_selection;
                              if (sel == TOPMENU_FILES) {
                                  menu_in_files = true; filemenu_sel = 0;
@@ -289,7 +303,7 @@ index 829088b..4b189a0 100644
                              } else if (sel == TOPMENU_SETTINGS) {
                                  cfg_snapshot       = cfg;
                                  snapshot_theme_idx = current_named_theme;
-@@ -2491,6 +2531,8 @@ int main(int argc, char *argv[]) {
+@@ -3433,6 +3473,8 @@ int main(int argc, char *argv[]) {
                      filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
                      if (filemenu_sel == FILEMENU_PASTE && clip.op == OP_NONE)
                          filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
@@ -298,7 +312,7 @@ index 829088b..4b189a0 100644
                      delete_confirm_active = false;
                  } else {
                      menu_selection = (menu_selection - 1 + TOPMENU_MAX) % TOPMENU_MAX;
-@@ -2510,6 +2552,8 @@ int main(int argc, char *argv[]) {
+@@ -3458,6 +3500,8 @@ int main(int argc, char *argv[]) {
                      filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
                      if (filemenu_sel == FILEMENU_PASTE && clip.op == OP_NONE)
                          filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
@@ -307,7 +321,7 @@ index 829088b..4b189a0 100644
                      delete_confirm_active = false;
                  } else {
                      menu_selection = (menu_selection + 1) % TOPMENU_MAX;
-@@ -2753,7 +2797,8 @@ int main(int argc, char *argv[]) {
+@@ -3738,7 +3782,8 @@ int main(int argc, char *argv[]) {
                  // ── File ops submenu ────────────────────────────────────────
                  SDL_Texture *sub_icons[FILEMENU_MAX] = {
                      tex_copy, tex_cut, tex_paste, tex_symlink, tex_rename,
@@ -317,7 +331,7 @@ index 829088b..4b189a0 100644
                  };
                  bool _any_m = false;
                  AppState *rs = &panes[active_pane];
-@@ -2767,6 +2812,7 @@ int main(int argc, char *argv[]) {
+@@ -3752,6 +3797,7 @@ int main(int argc, char *argv[]) {
                                 (i == FILEMENU_SYMLINK && (clip.op != OP_COPY || clip.count == 0 ||
                                     (!fs_supports_symlinks(panes[0].current_path) &&
                                      !fs_supports_symlinks(panes[1].current_path)))) ||
@@ -326,7 +340,7 @@ index 829088b..4b189a0 100644
                                              i == FILEMENU_RENAME || i == FILEMENU_DELETE));
                      bool sel = (i == filemenu_sel);
 diff --git a/vtree.h b/vtree.h
-index cd505c1..e36b6d9 100644
+index 69e8b3d..56f1b49 100644
 --- a/vtree.h
 +++ b/vtree.h
 @@ -5,6 +5,7 @@
@@ -337,13 +351,16 @@ index cd505c1..e36b6d9 100644
  
  #define MAX_PATH           1024
  #define MAX_FILES          1000   // imgview sibling cap — do not remove
-@@ -160,6 +161,9 @@ int   delete_path(const char *path);
+@@ -181,6 +182,9 @@ int   count_files(const char *path);
  char *trim(char *str);
  void  format_size(long long bytes, char *out);
  void  join_path(char *out, const char *dir, const char *name);
 +bool  is_archive_name(const char *name);
 +int   extract_archive(const char *archive_path, const char *dest_parent,
 +                      char *errbuf, size_t errbuf_len);
+ void  copy_str(char *dst, const char *src, size_t dst_size);  // safe, always-terminating strncpy replacement
  
  // lang.c — i18n
- #include "lang.h"
+-- 
+2.43.0
+

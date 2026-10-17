@@ -1,10 +1,29 @@
+From 57a6762138c4ac27dde30717313c68daf4da7e64 Mon Sep 17 00:00:00 2001
+From: Muse <muse@local>
+Date: Sat, 17 Oct 2026 14:06:49 +0700
+Subject: [PATCH] port: 0005 app version
+
+---
+ fileop.c |  1 -
+ main.c   | 37 ++++++++++++++++++++++++++++++++++---
+ 2 files changed, 34 insertions(+), 4 deletions(-)
+
+diff --git a/fileop.c b/fileop.c
+index d451661..a855b66 100644
+--- a/fileop.c
++++ b/fileop.c
+@@ -1660,4 +1660,3 @@ done:
+     free(text);
+     return rc;
+ }
+-
 diff --git a/main.c b/main.c
-index 829088b..1fa6299 100644
+index 71a24ba..f3843d9 100644
 --- a/main.c
 +++ b/main.c
-@@ -18,6 +18,35 @@
+@@ -22,6 +22,35 @@
  // ---------------------------------------------------------------------------
- #define VTREE_VERSION "1.1"
+ #define VTREE_VERSION "1.4.3"
  
 +// ---------------------------------------------------------------------------
 +// App release version (FileManagement) — read from the VERSION file shipped
@@ -38,7 +57,7 @@ index 829088b..1fa6299 100644
  // ---------------------------------------------------------------------------
  // Globals
  // ---------------------------------------------------------------------------
-@@ -1237,8 +1266,10 @@ static void draw_about_modal() {
+@@ -1614,8 +1643,10 @@ static void draw_about_modal() {
  
      // Measure text columns to compute centered title row
      int tw1 = 0, tw2 = 0;
@@ -50,21 +69,24 @@ index 829088b..1fa6299 100644
      int text_col_w = SDL_max(tw1, tw2);
      int logo_w     = tex_logo ? 64 + 12 : 0;
      int row_w      = logo_w + text_col_w;
-@@ -1254,7 +1285,7 @@ static void draw_about_modal() {
+@@ -1631,7 +1662,7 @@ static void draw_about_modal() {
      int txt_x       = row_x + logo_w;
      int txt_y       = row_y + (64 - txt_block_h) / 2;
-     draw_txt(font_header, tr("AppTitle"),      txt_x, txt_y,                                  cfg.theme.text);
--    draw_txt(font_footer, "v" VTREE_VERSION,   txt_x, txt_y + cfg.font_size_header + 4,       cfg.theme.link);
-+    draw_txt(font_footer, ver_text,   txt_x, txt_y + cfg.font_size_header + 4,       cfg.theme.link);
+     draw_txt_clipped(font_header, tr("AppTitle"),    txt_x, txt_y,                            text_col_w, cfg.theme.marked);
+-    draw_txt_clipped(font_footer, "v" VTREE_VERSION, txt_x, txt_y + cfg.font_size_header + 4, text_col_w, cfg.theme.link);
++    draw_txt_clipped(font_footer, ver_text, txt_x, txt_y + cfg.font_size_header + 4, text_col_w, cfg.theme.link);
  
      int ty = my + hh + 14;
      draw_txt_clipped(font_menu, tr("About_Subtitle"), mx + 18, ty, mw - 36, cfg.theme.text);
-@@ -1688,7 +1719,7 @@ int main(int argc, char *argv[]) {
+@@ -2423,7 +2454,7 @@ int main(int argc, char *argv[]) {
              printf("file operations (copy, move, delete, rename), and any errors encountered.\n");
              return 0;
          } else if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
 -            printf("vTree " VTREE_VERSION "\n");
 +            printf("FileManagement %s (vTree %s)\n", app_version(), VTREE_VERSION);
              return 0;
-         } else if (strcmp(argv[i], "--debug") == 0) {
-             debug_mode = true;
+         } else if ((strcmp(argv[i], "-c") == 0 || strcmp(argv[i], "--config") == 0) && i + 1 < argc) {
+             snprintf(configfile, sizeof(configfile), "%s", argv[++i]); 
+-- 
+2.43.0
+

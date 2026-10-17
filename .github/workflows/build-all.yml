@@ -5,7 +5,7 @@ on:
     inputs:
       vtree_version:
         description: 'vTree version/tag/commit'
-        default: 'v1.1'
+        default: 'v1.4.3'
       spruce_ref:
         description: 'spruceOS ref to pull Mini SDL2 libs from'
         default: 'main'

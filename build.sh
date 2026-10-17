@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-VTREE_VERSION="${VTREE_VERSION:-v1.1}"
+VTREE_VERSION="${VTREE_VERSION:-v1.4.3}"
 OUTPUT_DIR="${OUTPUT_DIR:-/output}"
 CROSS=aarch64-linux-gnu
 

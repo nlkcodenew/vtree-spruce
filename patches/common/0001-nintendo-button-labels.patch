@@ -1,22 +1,18 @@
-From: spruceUI <spruceUI@local>
-Subject: [PATCH] Use Nintendo-style face button labels
+From 772ad6f1b099fcc07cb74dea7bbabc36b3e3e275 Mon Sep 17 00:00:00 2001
+From: Muse <muse@local>
+Date: Sat, 17 Oct 2026 14:06:49 +0700
+Subject: [PATCH] port: 0001 nintendo button labels
 
-Spruce/Trimui/Miyoo devices use Nintendo physical layout
-(A=east, B=south, X=north, Y=west). SDL2's GameController API
-normalizes button names to Xbox layout (a=south, b=east), so
-without this swap the Settings UI displays "Confirm: b" when the
-user has bound the labeled-A button — confusing on a Nintendo-
-labeled handheld.
 ---
  keyboard.c | 8 ++++----
  1 file changed, 4 insertions(+), 4 deletions(-)
 
 diff --git a/keyboard.c b/keyboard.c
+index c9734e7..3f9fcfe 100644
 --- a/keyboard.c
 +++ b/keyboard.c
-@@ -248,10 +248,10 @@ const char *btn_label(SDL_GameControllerButton btn) {
- const char *btn_label(SDL_GameControllerButton btn) {
-     if (btn == SDL_CONTROLLER_BUTTON_INVALID) return "---";
+@@ -283,10 +283,10 @@ const char *btn_label(SDL_GameControllerButton btn) {
+ 
      const char *s = SDL_GameControllerGetStringForButton(btn);
      if (!s) return "?";
 -    if (strcmp(s, "a")             == 0) return "A";
@@ -30,3 +26,6 @@ diff --git a/keyboard.c b/keyboard.c
      if (strcmp(s, "start")         == 0) return "Start";
      if (strcmp(s, "guide")         == 0) return "Guide";
      if (strcmp(s, "back")          == 0) return "Select";
+-- 
+2.43.0
+

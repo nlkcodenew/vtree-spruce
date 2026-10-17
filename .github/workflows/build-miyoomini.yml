@@ -5,7 +5,7 @@ on:
     inputs:
       vtree_version:
         description: 'vTree version/tag/commit'
-        default: 'v1.1'
+        default: 'v1.4.3'
       spruce_ref:
         description: 'spruceOS ref to pull Mini SDL2 libs from'
         default: 'main'
@@ -13,7 +13,7 @@ on:
     inputs:
       vtree_version:
         type: string
-        default: 'v1.1'
+        default: 'v1.4.3'
       spruce_ref:
         type: string
         default: 'main'
@@ -59,7 +59,7 @@ jobs:
         run: |
           mkdir -p output
           docker run --rm \
-            -e VTREE_VERSION=${{ inputs.vtree_version || 'v1.1' }} \
+            -e VTREE_VERSION=${{ inputs.vtree_version || 'v1.4.3' }} \
             -v ${{ github.workspace }}/output:/output \
             vtree-builder-miyoomini
 
