@@ -59,11 +59,22 @@ if [ -x "$HOME/ota-update.sh" ]; then
             "$HOME/ota-update.sh" --apply >/dev/null 2>&1
             sleep 600
         done
-    ) &
+    ) </dev/null >/dev/null 2>&1 &
     OTA_PID=$!
-    # Kill vong lap nen khi script thoat theo bat ky duong nao (ke ca exit 1
-    # o nhanh unsupported platform) de khong rot tien trinh moi coi.
-    trap '[ -n "$OTA_PID" ] && kill "$OTA_PID" 2>/dev/null' EXIT
+    # Kill vong lap nen + cac con (sleep/curl) khi script thoat theo bat
+    # ky duong nao (ke ca exit 1 o nhanh unsupported platform).
+    # Ly do tach FD khoi launcher: emulatorlauncher (Knulli/Batocera)
+    # chay script voi stdout/stderr la PIPE va cho pipe EOF; tien trinh
+    # mo coi giu pipe mo -> ES ket sau khi app thoat ("treo"). 2026-10-20
+    trap '
+      if [ -n "$OTA_PID" ]; then
+        kill "$OTA_PID" 2>/dev/null
+        for p in /proc/[0-9]*; do
+          [ -r "$p/stat" ] || continue
+          pp=$(awk "{print \$4}" "$p/stat" 2>/dev/null)
+          [ "$pp" = "$OTA_PID" ] && kill "${p#/proc/}" 2>/dev/null
+        done
+      fi' EXIT
 fi
 
 case "$PLATFORM" in
