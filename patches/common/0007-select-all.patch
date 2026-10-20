@@ -1,0 +1,165 @@
+diff --git a/lang/English.ini b/lang/English.ini
+index 77816d5..c689844 100644
+--- a/lang/English.ini
++++ b/lang/English.ini
+@@ -24,6 +24,8 @@ FileOp_NewFile=New File
+ FileOp_NewFolder=New Folder
+ FileOp_Back=Back
+ FileOp_Extract=Extract
++FileOp_MarkAll=Select All
++FileOp_UnmarkAll=Unselect All
+ FileOp_Extracted=Extracted
+ FileOp_ConfirmDelete=CONFIRM DELETE?
+ 
+diff --git a/lang/Polish.ini b/lang/Polish.ini
+index 97fdbd8..b29ab1a 100644
+--- a/lang/Polish.ini
++++ b/lang/Polish.ini
+@@ -23,6 +23,8 @@ FileOp_Delete=Usuń
+ FileOp_NewFile=Nowy plik
+ FileOp_NewFolder=Nowy folder
+ FileOp_Back=Wróć
++FileOp_MarkAll=Zaznacz wszystko
++FileOp_UnmarkAll=Odznacz wszystko
+ FileOp_Extract=Wypakuj
+ FileOp_Extracted=Wypakowano
+ FileOp_ConfirmDelete=POTWIERDŹ USUNIĘCIE?
+diff --git a/lang/Spanish.ini b/lang/Spanish.ini
+index e4d41ed..36eddc2 100644
+--- a/lang/Spanish.ini
++++ b/lang/Spanish.ini
+@@ -23,6 +23,8 @@ FileOp_Delete=Borrar
+ FileOp_NewFile=Nuevo archivo
+ FileOp_NewFolder=Nueva carpeta
+ FileOp_Back=Atras
++FileOp_MarkAll=Seleccionar todo
++FileOp_UnmarkAll=Deseleccionar todo
+ FileOp_ConfirmDelete=¿CONFIRMAR BORRADO?
+ 
+ [ActionChooser]
+diff --git a/lang/Vietnamese.ini b/lang/Vietnamese.ini
+index bdca999..6e02a00 100644
+--- a/lang/Vietnamese.ini
++++ b/lang/Vietnamese.ini
+@@ -24,6 +24,8 @@ FileOp_NewFile=Tạo tệp mới
+ FileOp_NewFolder=Tạo thư mục mới
+ FileOp_Back=Quay lại
+ FileOp_Extract=Giải nén
++FileOp_MarkAll=Chọn tất cả
++FileOp_UnmarkAll=Bỏ chọn tất cả
+ FileOp_Extracted=Đã giải nén
+ FileOp_ConfirmDelete=XÁC NHẬN SẼ XÓA?
+ 
+diff --git a/main.c b/main.c
+index f3843d9..13fe4ef 100644
+--- a/main.c
++++ b/main.c
+@@ -129,11 +129,13 @@ static const char *topmenu_items[TOPMENU_MAX] = { "Menu_Files", "Menu_Settings",
+ #define FILEMENU_NEWDIR  7
+ #define FILEMENU_BACK    8
+ #define FILEMENU_EXTRACT 9
+-#define FILEMENU_MAX     10
++#define FILEMENU_MARKALL   10
++#define FILEMENU_UNMARKALL 11
++#define FILEMENU_MAX     12
+ static const char *filemenu_items[FILEMENU_MAX] = {
+     "FileOp_Copy", "FileOp_Cut", "FileOp_Paste", "FileOp_Symlink",
+     "FileOp_Rename", "FileOp_Delete", "FileOp_NewFile", "FileOp_NewFolder",
+-    "FileOp_Back", "FileOp_Extract"
++    "FileOp_Back", "FileOp_Extract", "FileOp_MarkAll", "FileOp_UnmarkAll"
+ };
+ 
+ // True when the Extract entry must be skipped/disabled: only a single
+@@ -149,6 +151,23 @@ static bool menu_extract_unavailable(void) {
+     return !is_archive_name(fe->name);
+ }
+ 
++// True when Select All has nothing to mark in the active pane (empty
++// folder, or only the ".." parent entry).
++static bool menu_markall_unavailable(void) {
++    AppState *ps = &panes[active_pane];
++    for (int i = 0; i < ps->file_count; i++)
++        if (strcmp(ps->files[i].name, "..") != 0) return false;
++    return true;
++}
++
++// True when Unselect All has nothing to clear in the active pane.
++static bool menu_unmarkall_unavailable(void) {
++    AppState *ps = &panes[active_pane];
++    for (int i = 0; i < ps->file_count; i++)
++        if (ps->files[i].marked) return false;
++    return true;
++}
++
+ SDL_Window        *window   = NULL;
+ SDL_Renderer      *renderer = NULL;
+ SDL_GameController *pad     = NULL;
+@@ -2758,7 +2777,7 @@ int main(int argc, char *argv[]) {
+                         about_active = false; delete_confirm_active = false;
+                         if (cfg.two_menu_mode) {
+                             menu_in_files = true; menu_is_system = false; filemenu_sel = 0;
+-                            { bool _am=false; for(int _i=0;_i<s->file_count;_i++) if(s->files[_i].marked){_am=true;break;} if(!_am&&!cfg.single_pane) for(int _i=0;_i<panes[1-active_pane].file_count;_i++) if(panes[1-active_pane].files[_i].marked){_am=true;break;} bool _dd=(!_am&&s->file_count>0&&strcmp(s->files[s->selected_index].name,"..")==0); while((_dd&&(filemenu_sel==FILEMENU_COPY||filemenu_sel==FILEMENU_CUT||filemenu_sel==FILEMENU_RENAME||filemenu_sel==FILEMENU_DELETE))||(filemenu_sel==FILEMENU_PASTE&&clip.op==OP_NONE)||(filemenu_sel==FILEMENU_SYMLINK&&(clip.op!=OP_COPY||clip.count==0||(!fs_supports_symlinks(panes[0].current_path)&&!fs_supports_symlinks(panes[1].current_path))))||(filemenu_sel==FILEMENU_BACK&&cfg.two_menu_mode)||(filemenu_sel==FILEMENU_EXTRACT&&menu_extract_unavailable())) filemenu_sel++; }
++                            { bool _am=false; for(int _i=0;_i<s->file_count;_i++) if(s->files[_i].marked){_am=true;break;} if(!_am&&!cfg.single_pane) for(int _i=0;_i<panes[1-active_pane].file_count;_i++) if(panes[1-active_pane].files[_i].marked){_am=true;break;} bool _dd=(!_am&&s->file_count>0&&strcmp(s->files[s->selected_index].name,"..")==0); while((_dd&&(filemenu_sel==FILEMENU_COPY||filemenu_sel==FILEMENU_CUT||filemenu_sel==FILEMENU_RENAME||filemenu_sel==FILEMENU_DELETE))||(filemenu_sel==FILEMENU_PASTE&&clip.op==OP_NONE)||(filemenu_sel==FILEMENU_SYMLINK&&(clip.op!=OP_COPY||clip.count==0||(!fs_supports_symlinks(panes[0].current_path)&&!fs_supports_symlinks(panes[1].current_path))))||(filemenu_sel==FILEMENU_BACK&&cfg.two_menu_mode)||(filemenu_sel==FILEMENU_EXTRACT&&menu_extract_unavailable())||(filemenu_sel==FILEMENU_MARKALL&&menu_markall_unavailable())||(filemenu_sel==FILEMENU_UNMARKALL&&menu_unmarkall_unavailable())) filemenu_sel++; }
+                         } else {
+                             menu_in_files = false; menu_is_system = false; menu_selection = 0;
+                         }
+@@ -3037,6 +3056,8 @@ int main(int argc, char *argv[]) {
+                                        (!fs_supports_symlinks(panes[0].current_path) &&
+                                         !fs_supports_symlinks(panes[1].current_path)))) ||
+                                    (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable()) ||
++                                   (filemenu_sel == FILEMENU_MARKALL && menu_markall_unavailable()) ||
++                                   (filemenu_sel == FILEMENU_UNMARKALL && menu_unmarkall_unavailable()) ||
+                                    DOTDOT_SKIP(filemenu_sel) || BACK_SKIP(filemenu_sel))
+                                 filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
+                             delete_confirm_active = false;
+@@ -3049,6 +3070,8 @@ int main(int argc, char *argv[]) {
+                                        (!fs_supports_symlinks(panes[0].current_path) &&
+                                         !fs_supports_symlinks(panes[1].current_path)))) ||
+                                    (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable()) ||
++                                   (filemenu_sel == FILEMENU_MARKALL && menu_markall_unavailable()) ||
++                                   (filemenu_sel == FILEMENU_UNMARKALL && menu_unmarkall_unavailable()) ||
+                                    DOTDOT_SKIP(filemenu_sel) || BACK_SKIP(filemenu_sel))
+                                 filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
+                             delete_confirm_active = false;
+@@ -3059,6 +3082,19 @@ int main(int argc, char *argv[]) {
+                                 if (cfg.two_menu_mode) { current_mode = MODE_EXPLORER; }
+                                 else { menu_in_files = false; }
+                                 delete_confirm_active = false;
++                            } else if (filemenu_sel == FILEMENU_MARKALL) {
++                                for (int i = 0; i < s->file_count; i++)
++                                    if (strcmp(s->files[i].name, "..") != 0)
++                                        s->files[i].marked = true;
++                                if (cfg.two_menu_mode) { current_mode = MODE_EXPLORER; }
++                                else { menu_in_files = false; }
++                                delete_confirm_active = false;
++                            } else if (filemenu_sel == FILEMENU_UNMARKALL) {
++                                for (int i = 0; i < s->file_count; i++)
++                                    s->files[i].marked = false;
++                                if (cfg.two_menu_mode) { current_mode = MODE_EXPLORER; }
++                                else { menu_in_files = false; }
++                                delete_confirm_active = false;
+                             } else if (filemenu_sel == FILEMENU_COPY || filemenu_sel == FILEMENU_CUT) {
+                                 FileOp req_op = (filemenu_sel == FILEMENU_COPY) ? OP_COPY : OP_CUT;
+                                 if (clip.op != OP_NONE) {
+@@ -3510,6 +3546,10 @@ int main(int argc, char *argv[]) {
+                         filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
+                     if (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable())
+                         filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
++                    if (filemenu_sel == FILEMENU_MARKALL && menu_markall_unavailable())
++                        filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
++                    if (filemenu_sel == FILEMENU_UNMARKALL && menu_unmarkall_unavailable())
++                        filemenu_sel = (filemenu_sel - 1 + FILEMENU_MAX) % FILEMENU_MAX;
+                     delete_confirm_active = false;
+                 } else {
+                     menu_selection = (menu_selection - 1 + TOPMENU_MAX) % TOPMENU_MAX;
+@@ -3537,6 +3577,10 @@ int main(int argc, char *argv[]) {
+                         filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
+                     if (filemenu_sel == FILEMENU_EXTRACT && menu_extract_unavailable())
+                         filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
++                    if (filemenu_sel == FILEMENU_MARKALL && menu_markall_unavailable())
++                        filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
++                    if (filemenu_sel == FILEMENU_UNMARKALL && menu_unmarkall_unavailable())
++                        filemenu_sel = (filemenu_sel + 1) % FILEMENU_MAX;
+                     delete_confirm_active = false;
+                 } else {
+                     menu_selection = (menu_selection + 1) % TOPMENU_MAX;

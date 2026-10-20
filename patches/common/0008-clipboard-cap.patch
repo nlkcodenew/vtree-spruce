@@ -1,0 +1,13 @@
+diff --git a/vtree.h b/vtree.h
+index 47cb4ab..546f0ab 100644
+--- a/vtree.h
++++ b/vtree.h
+@@ -10,7 +10,7 @@
+ #define MAX_PATH           1024
+ #define MAX_FILES          1000   // imgview sibling cap — do not remove
+ #define FILES_INIT_CAP     512
+-#define MAX_CLIPBOARD      100
++#define MAX_CLIPBOARD      8192  // fork: was 100 — bulk copy of ROM folders needs far more
+ #define GLYPH_CACHE_SIZE   128
+ #define THEME_PRESET_COUNT 1   // only the built-in Dark fallback lives in C now
+ 
