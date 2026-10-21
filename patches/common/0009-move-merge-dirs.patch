@@ -1,0 +1,29 @@
+diff --git a/main.c b/main.c
+index f3843d9..948e65c 100644
+--- a/main.c
++++ b/main.c
+@@ -2133,12 +2152,20 @@ static void *paste_thread_fn(void *arg) {
+             copy_path(clip.src_paths[i], d);
+         } else {
+             if (rename(clip.src_paths[i], d) != 0) {
+-                if (errno != EXDEV) {
+-                    vtree_log("[move] rename FAILED: %s -> %s (errno %d: %s)\n",
+-                              clip.src_paths[i], d, errno, strerror(errno));
+-                } else {
++                int e = errno;
++                if (e == EXDEV || e == EEXIST || e == ENOTEMPTY) {
++                    // Cross-device move, or the destination is a non-empty
++                    // directory with the same name: rename(2) cannot merge
++                    // directories, so fall back to a recursive copy (which
++                    // overwrites files at every depth) + remove the source.
+                     int cr = copy_path(clip.src_paths[i], d);
+                     if (!paste_abort && cr == 0) delete_path(clip.src_paths[i]);
++                    else
++                        vtree_log("[move] merge copy FAILED: %s -> %s\n",
++                                  clip.src_paths[i], d);
++                } else {
++                    vtree_log("[move] rename FAILED: %s -> %s (errno %d: %s)\n",
++                              clip.src_paths[i], d, e, strerror(e));
+                 }
+             }
+         }
