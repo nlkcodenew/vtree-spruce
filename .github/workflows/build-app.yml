@@ -108,11 +108,17 @@ jobs:
 
       - name: Create FileManagement.zip
         run: |
+          mkdir -p stage/system stage/roms/tools/images
+          cp -r stage/FileManagement stage/system/filemanagement
+          cp knulli/FileManagement.sh stage/roms/tools/FileManagement.sh
+          chmod +x stage/roms/tools/FileManagement.sh
+          cp app/file.png stage/roms/tools/images/filemanagement.png
+          cp HUONG-DAN-CAI-DAT.txt stage/HUONG-DAN-CAI-DAT.txt
           cd stage
-          zip -r ../FileManagement.zip FileManagement
+          zip -r ../FileManagement.zip FileManagement system roms HUONG-DAN-CAI-DAT.txt
           cd ..
           ls -la FileManagement.zip
-          unzip -l FileManagement.zip | head -30
+          unzip -l FileManagement.zip
 
       - name: Upload to beta release
         env:

@@ -1,0 +1,69 @@
+HƯỚNG DẪN CÀI ĐẶT FILEMANAGEMENT
+(Chạy được cả stock OS và Knulli OS — Brick Pro, Smart Pro S, cùng một bản build)
+
+File ZIP duy nhất trong release chứa đủ mọi thứ cho cả hai hệ điều hành
+(thư mục FileManagement/ cho stock OS, thư mục system/ + roms/ cho
+Knulli OS, và file hướng dẫn này). Tùy máy đang chạy hệ điều hành
+nào mà làm theo phần A hoặc phần B dưới đây.
+
+================================================================
+PHẦN A — STOCK OS (hệ điều hành gốc của máy)
+================================================================
+1. Tải file ZIP của bản release về máy tính, giải nén ra sẽ được các
+   thư mục FileManagement/, system/, roms/ và file
+   HUONG-DAN-CAI-DAT.txt.
+
+2. Chỉ cần thư mục FileManagement/: chép nó vào thư mục Apps/ trên
+   thẻ nhớ (bỏ qua system/, roms/ và file hướng dẫn — chúng dành
+   cho Knulli OS).
+
+3. Cắm thẻ vào máy, mở mục Apps trên máy, chọn FileManagement.
+
+Lưu ý (stock OS):
+- Cập nhật: giải nén/copy đè thư mục Apps/FileManagement/, hoặc dùng
+  OTA tự động im lặng của app (app tự kiểm tra bản mới khi mở).
+- Chép đè luôn, không cần xóa thư mục cũ trước (copy là copy đè).
+
+================================================================
+PHẦN B — KNULLI OS
+================================================================
+Trên Knulli, app nằm ở mục Tools (không phải Ports). File ZIP đã
+chứa sẵn mọi thứ cho Knulli, không cần tải thêm file nào khác.
+
+1. Giải nén file ZIP ra máy tính, sẽ được các thư mục system/,
+   roms/ và file HUONG-DAN-CAI-DAT.txt (cùng thư mục FileManagement/
+   dành cho stock OS — bỏ qua).
+
+2. Chép thư mục system/filemanagement/ vào /userdata/system/ trên
+   máy game (gộp/ghi đè — chỉ chép đè, không cần xóa thư mục cũ).
+   Cách chép: qua SFTP/SSH, hoặc tháo thẻ gắn vào máy tính rồi chép
+   vào phân vùng dữ liệu (thư mục system/ nằm ở gốc phân vùng đó).
+
+3. Chép file roms/tools/FileManagement.sh vào /userdata/roms/tools/
+   trên máy game, rồi cấp quyền chạy (qua SSH):
+     chmod +x /userdata/roms/tools/FileManagement.sh
+
+4. (Tùy chọn, để hiện icon đẹp) Chép file
+   roms/tools/images/filemanagement.png vào
+   /userdata/roms/tools/images/.
+
+5. Khởi động lại máy, mở EmulationStation, vào mục Tools rồi chọn
+   FileManagement.
+
+Lưu ý (Knulli OS):
+- Launcher tự tạo liên kết /mnt/SDCARD trỏ sang /userdata nếu máy chưa
+  có.
+- Cập nhật: app tự kiểm tra bản mới khi mở (OTA im lặng). Cập nhật OTA
+  chỉ cập nhật payload trong /userdata/system/filemanagement/, không
+  tự chuyển file launcher.
+
+ĐÃ CÀI BẢN CŨ Ở PORTS, MUỐN CHUYỂN SANG TOOLS:
+- Chép file FileManagement.sh từ /userdata/roms/ports/ sang
+  /userdata/roms/tools/ (xóa file cũ ở Ports sau khi chép).
+- Chép icon filemanagement.png từ /userdata/roms/ports/images/ sang
+  /userdata/roms/tools/images/.
+- Chuyển mục gamelist: dừng EmulationStation trước
+  (/etc/init.d/S31emulationstation stop), cắt khối <game> của
+  FileManagement từ /userdata/roms/ports/gamelist.xml sang
+  /userdata/roms/tools/gamelist.xml (tạo file mới nếu chưa có), rồi
+  khởi động lại máy.
