@@ -2,12 +2,12 @@
   "files": [
     {
       "path": "FileManagement.zip",
-      "sha256": "b682a7b3a91286a94e1e3b9c5bf1bd8521ba32227f5a77b7a434f0a8c887d15d",
-      "size": 4794253,
-      "url": "https://github.com/nlkcodenew/vtree-spruce/releases/download/v1.4.4/FileManagement.zip"
+      "sha256": "465683e0b26a3bbef11a14efb74ee81059b964566d4693b7fdc6b2f700ef83b6",
+      "size": 9645311,
+      "url": "https://github.com/nlkcodenew/vtree-spruce/releases/download/v1.4.5/FileManagement.zip"
     }
   ],
   "kid": "fm1",
-  "signature": "6B-OFrkHYtuK2i46sKfSjN9Qp2-FAQX8a85Q_BkGp8Kx7V2PG9oEvV3HuI6T41_WZoujboji4GEEbPH32NE4Bw",
-  "version": "1.4.4"
+  "signature": "XFiMZ0M0KBVTWwZo5oISStqAVl8XbVFjmslTsFjoFvRJP32ZOsonX8ESnabLiYFjjBhg0_lRkxWwZhraFUImAw",
+  "version": "1.4.5"
 }
